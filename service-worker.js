@@ -1,5 +1,5 @@
-// Pantry v1.1: network-first on GitHub Pages; retain a cache for offline use.
-const CACHE_NAME = 'pantry-v1-1-no-zoom-20261030';
+// Pantry v1.2: network-first on GitHub Pages; retain a cache for offline use.
+const CACHE_NAME = 'pantry-v1-2-two-locations-20261030';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting()));

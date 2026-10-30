@@ -1,6 +1,7 @@
 'use strict';
 
-const STORAGE_KEY = 'pantry-groceries-v1';
+const STORAGE_KEY = 'pantry-groceries-v1'; // Legacy v1 key: intentionally retained, never erased.
+const LOCATIONS_KEY = 'pantry-two-locations-v2';
 const MAX_NUMBER = 1000000;
 const $ = (selector) => document.querySelector(selector);
 const formatQuantity = (value) => Number(value.toFixed(2)).toLocaleString('en-AU', {maximumFractionDigits:2});
@@ -8,30 +9,79 @@ const roundQuantity = (value) => Math.round((value + Number.EPSILON) * 100) / 10
 
 const fallbackId = () => `item-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 function makeId() { return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : fallbackId(); }
-function readSavedItems() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) throw new Error('Invalid data');
-    return parsed.filter(isValidItem).map(x => ({id:x.id,name:x.name.trim(),unit:x.unit || '',current:x.current,min:x.min,max:x.max}));
-  } catch (error) { console.warn('Cannot read saved data', error); return []; }
-}
 function isValidItem(x) {
   return !!x && typeof x.id === 'string' && typeof x.name === 'string' && x.name.trim().length > 0 && x.name.length <= 80 &&
     typeof x.unit === 'string' && x.unit.length <= 24 &&
     ['current','min','max'].every(k => typeof x[k] === 'number' && Number.isFinite(x[k]) && x[k] >= 0 && x[k] <= MAX_NUMBER) &&
     x.min <= x.max && x.max > 0;
 }
-let items = readSavedItems();
+function cleanItem(x) { return {id:x.id,name:x.name.trim(),unit:x.unit,current:x.current,min:x.min,max:x.max}; }
+function validItemList(list) { return Array.isArray(list) && list.length <= 20000 && list.every(isValidItem) &&
+  new Set(list.map(x => x.name.trim().toLocaleLowerCase())).size === list.length &&
+  new Set(list.map(x => x.id)).size === list.length; }
+function defaultLocations(items = []) {
+  return {version:2,activeLocation:'one',locations:[
+    {id:'one',name:'Location 1',items:items.map(cleanItem)},
+    {id:'two',name:'Location 2',items:[]}
+  ]};
+}
+function validateLocations(data) {
+  return !!data && data.version === 2 && ['one','two'].includes(data.activeLocation) &&
+    Array.isArray(data.locations) && data.locations.length === 2 &&
+    data.locations[0].id === 'one' && data.locations[1].id === 'two' &&
+    data.locations.every(loc => typeof loc.name === 'string' && !!loc.name.trim() && loc.name.length <= 40 && validItemList(loc.items));
+}
+function readSavedData() {
+  try {
+    const existing = localStorage.getItem(LOCATIONS_KEY);
+    if (existing !== null) {
+      const parsed = JSON.parse(existing);
+      if (!validateLocations(parsed)) throw new Error('Invalid two-location data');
+      return parsed;
+    }
+    // One-time non-destructive migration: all existing groceries go to Location 1.
+    const legacyRaw = localStorage.getItem(STORAGE_KEY);
+    if (legacyRaw !== null) {
+      const legacy = JSON.parse(legacyRaw);
+      if (!Array.isArray(legacy)) throw new Error('Invalid legacy inventory');
+      return defaultLocations(legacy.filter(isValidItem));
+    }
+  } catch (error) { console.error('Could not load saved inventory',error); }
+  return defaultLocations();
+}
+let pantry = readSavedData();
+let activeLocation = pantry.activeLocation;
+let items = pantry.locations.find(loc => loc.id === activeLocation).items;
+function activeName() { return pantry.locations.find(loc => loc.id === activeLocation).name; }
 let currentTab = 'inventory';
 let editingId = null;
 let toastTimer;
 let searchTerm = '';
 
 function save() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); return true; }
-  catch (error) { toast('Could not save locally. Export a backup.'); console.error(error); return false; }
+  try {
+    pantry.activeLocation = activeLocation;
+    pantry.locations.find(loc => loc.id === activeLocation).items = items;
+    localStorage.setItem(LOCATIONS_KEY, JSON.stringify(pantry));
+    return true;
+  } catch (error) { toast('Could not save locally. Export a backup.'); console.error(error); return false; }
+}
+function changeLocation(id) {
+  if (!['one','two'].includes(id) || id === activeLocation) return;
+  activeLocation = id;
+  items = pantry.locations.find(loc => loc.id === id).items;
+  editingId = null;
+  searchTerm = '';
+  $('#searchInput').value = '';
+  save();
+  render();
+}
+function refreshLocationControls() {
+  const select = $('#locationSelect');
+  select.innerHTML = pantry.locations.map(loc => `<option value="${loc.id}">${escapeHtml(loc.name)}</option>`).join('');
+  select.value = activeLocation;
+  $('#inventoryHeading').textContent = `${activeName()} inventory`;
+  $('#shoppingHeading').textContent = `${activeName()} shopping list`;
 }
 function restockQuantity(item) { return item.current < item.min ? roundQuantity(item.max - item.current) : 0; }
 function lowItems() { return items.filter(x => restockQuantity(x) > 0).sort((a,b) => a.name.localeCompare(b.name)); }
@@ -63,6 +113,7 @@ function emptyVisual(type) {
   return `<div class="empty"><div class="empty-symbol" aria-hidden="true">${iconHtml()}</div><h3>${title}</h3><p>${desc}</p>${button}</div>`;
 }
 function render() {
+  refreshLocationControls();
   const needed = lowItems();
   $('#totalCount').textContent = items.length;
   $('#lowCount').textContent = needed.length;
@@ -141,7 +192,8 @@ function handleSubmit(event) {
   save(); closeDialog('itemDialog'); render(); toast(index === -1 ? 'Item added' : 'Item updated');
 }
 function exportBackup() {
-  const data = JSON.stringify({app:'Pantry Grocery Tracker',version:1,exportedAt:new Date().toISOString(),items},null,2);
+  pantry.locations.find(loc => loc.id === activeLocation).items = items;
+  const data = JSON.stringify({app:'Pantry Grocery Tracker',version:2,exportedAt:new Date().toISOString(),activeLocation,locations:pantry.locations},null,2);
   const url = URL.createObjectURL(new Blob([data], {type:'application/json'}));
   const a = document.createElement('a'); a.href = url; a.download = `pantry-backup-${new Date().toISOString().slice(0,10)}.json`;
   document.body.appendChild(a); a.click(); a.remove();
@@ -155,26 +207,45 @@ async function importBackup(event) {
   if (file.size > 5000000) { toast('Backup file is too large'); return; }
   try {
     const data = JSON.parse(await file.text());
-    if (!data || data.app !== 'Pantry Grocery Tracker' || data.version !== 1 || !Array.isArray(data.items) || data.items.length > 20000 || !data.items.every(isValidItem)) throw new Error('Invalid backup format');
-    const names = new Set(), ids = new Set();
-    for (const item of data.items) {
-      if (names.has(item.name.trim().toLocaleLowerCase()) || ids.has(item.id)) throw new Error('Duplicate items in backup');
-      names.add(item.name.trim().toLocaleLowerCase()); ids.add(item.id);
-    }
-    if (!confirm(`Replace your current ${items.length} items with the ${data.items.length} items in this backup? This cannot be undone unless you export your current data first.`)) return;
-    const old = items;
-    items = data.items.map(x => ({id:x.id,name:x.name.trim(),unit:x.unit,current:x.current,min:x.min,max:x.max}));
-    if (!save()) { items = old; return; }
-    closeDialog('settingsDialog'); searchTerm = ''; $('#searchInput').value = ''; render(); toast('Backup restored');
+    if (!data || data.app !== 'Pantry Grocery Tracker') throw new Error('Invalid backup format');
+    let restored;
+    if (data.version === 2 && validateLocations(data)) {
+      restored = structuredClone({version:2,activeLocation:data.activeLocation,locations:data.locations});
+    } else if (data.version === 1 && validItemList(data.items)) {
+      restored = defaultLocations(data.items); // Legacy backup imported into Location 1.
+    } else throw new Error('Invalid backup format');
+    const count = restored.locations.reduce((sum,loc) => sum + loc.items.length, 0);
+    if (!confirm(`Replace BOTH locations with this backup (${count} total items)? Export your current backup first. This cannot be undone.`)) return;
+    const previous = pantry, oldLocation = activeLocation, oldItems = items;
+    pantry = restored;
+    activeLocation = pantry.activeLocation;
+    items = pantry.locations.find(loc => loc.id === activeLocation).items;
+    if (!save()) { pantry = previous; activeLocation = oldLocation; items = oldItems; return; }
+    closeDialog('settingsDialog'); searchTerm = ''; $('#searchInput').value = ''; render(); toast('Both locations restored');
   } catch (error) { console.error(error); toast('Invalid backup file'); }
 }
 
+$('#locationSelect').addEventListener('change', e => changeLocation(e.target.value));
 $('#inventoryTab').addEventListener('click', () => { currentTab='inventory'; render(); });
 $('#shoppingTab').addEventListener('click', () => { currentTab='shopping'; render(); });
 $('#searchInput').addEventListener('input', e => { searchTerm=e.target.value.trim().toLocaleLowerCase(); render(); });
 $('#addTopBtn').addEventListener('click', () => openItemDialog());
 $('#floatingAdd').addEventListener('click', () => openItemDialog());
-$('#settingsBtn').addEventListener('click', () => $('#settingsDialog').showModal());
+$('#settingsBtn').addEventListener('click', () => {
+  $('#locationOneName').value = pantry.locations[0].name;
+  $('#locationTwoName').value = pantry.locations[1].name;
+  $('#settingsDialog').showModal();
+});
+$('#saveLocationsBtn').addEventListener('click', () => {
+  const first = $('#locationOneName').value.trim();
+  const second = $('#locationTwoName').value.trim();
+  if (!first || !second || first.length > 40 || second.length > 40) { toast('Enter two location names (up to 40 characters).'); return; }
+  const oldNames = pantry.locations.map(loc => loc.name);
+  pantry.locations[0].name = first;
+  pantry.locations[1].name = second;
+  if (!save()) { pantry.locations.forEach((loc,i) => loc.name = oldNames[i]); return; }
+  render(); toast('Location names saved');
+});
 $('#inventoryList').addEventListener('click', handleAction);
 $('#shoppingList').addEventListener('click', handleAction);
 $('#itemForm').addEventListener('submit', handleSubmit);

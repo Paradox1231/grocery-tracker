@@ -38,6 +38,14 @@
       </button>
     </header>
 
+    <div class="location-strip" role="group" aria-label="Select location">
+      <label for="locationSelect">Inventory location</label>
+      <select id="locationSelect" aria-label="Select inventory location">
+        <option value="one">Location 1</option>
+        <option value="two">Location 2</option>
+      </select>
+    </div>
+
     <main>
       <section class="overview" aria-label="Grocery overview">
         <p class="eyebrow">A LITTLE MORE ORGANISED</p>
@@ -57,7 +65,7 @@
 
         <section id="inventoryPanel" class="panel" aria-labelledby="inventoryTab">
           <div class="panel-head">
-            <div><h2>Your inventory</h2><p>Tap + or − as your stock changes.</p></div>
+            <div><h2 id="inventoryHeading">Your inventory</h2><p>Tap + or − as your stock changes.</p></div>
             <button class="primary-btn add-desktop" id="addTopBtn" type="button"><span class="plus-symbol">+</span> Add item</button>
           </div>
           <div class="search-wrap" id="searchWrap">
@@ -69,13 +77,13 @@
 
         <section id="shoppingPanel" class="panel" aria-labelledby="shoppingTab" hidden>
           <div class="panel-head">
-            <div><h2>Shopping list</h2><p>Automatically updates when stock is below minimum.</p></div>
+            <div><h2 id="shoppingHeading">Shopping list</h2><p>Automatically updates when stock is below minimum.</p></div>
           </div>
           <div id="shoppingList" class="item-list"></div>
         </section>
       </div>
     </main>
-    <div class="bottom-info">Your grocery data stays on this device. Use Settings to export a backup.</div>
+    <div class="bottom-info">Both locations are saved on this device. Back up both in Settings.</div>
     <button class="floating-add" id="floatingAdd" aria-label="Add grocery item"><svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
   </div>
 
@@ -102,10 +110,16 @@
     <div class="dialog-inner">
       <div class="dialog-header"><div><p class="eyebrow">YOUR DATA</p><h2>Settings & backup</h2></div><button type="button" class="close-btn" data-close="settingsDialog" aria-label="Close">×</button></div>
       <p class="settings-copy">Everything is saved locally on this device. Export a backup occasionally, especially before clearing browser data or switching phones.</p>
+      <div class="location-names">
+        <h3>Name your locations</h3>
+        <label class="field"><span>Location 1</span><input id="locationOneName" type="text" maxlength="40" placeholder="e.g. Home" autocomplete="off" /></label>
+        <label class="field"><span>Location 2</span><input id="locationTwoName" type="text" maxlength="40" placeholder="e.g. Second home" autocomplete="off" /></label>
+        <button class="secondary-btn" type="button" id="saveLocationsBtn">Save location names</button>
+      </div>
       <button class="settings-action" id="exportBtn" type="button"><span class="settings-action-icon">↓</span><span><strong>Export backup</strong><small>Save your items to a JSON file</small></span><span class="action-chevron">›</span></button>
       <button class="settings-action" id="importBtn" type="button"><span class="settings-action-icon">↑</span><span><strong>Import backup</strong><small>Restore items from a saved file</small></span><span class="action-chevron">›</span></button>
       <input type="file" accept=".json,application/json" id="importFile" hidden/>
-      <div class="settings-note">Version 1.1 · Offline-capable after first online load. No account or automatic sync.</div>
+      <div class="settings-note">Version 1.2 · Two independent locations · Offline-capable after first online load. No account or automatic sync.</div>
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
