@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#f7f8f5" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -13,6 +13,13 @@
   <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="stylesheet" href="./styles.css" />
   <title>Pantry | Grocery tracker</title>
+  <!-- Keep the home-screen app at a fixed scale while preserving normal scrolling. -->
+  <style>
+    html, body { touch-action: pan-x pan-y; }
+    @media (pointer: coarse) {
+      .search-wrap input, .field input { font-size: 16px !important; }
+    }
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -98,10 +105,19 @@
       <button class="settings-action" id="exportBtn" type="button"><span class="settings-action-icon">↓</span><span><strong>Export backup</strong><small>Save your items to a JSON file</small></span><span class="action-chevron">›</span></button>
       <button class="settings-action" id="importBtn" type="button"><span class="settings-action-icon">↑</span><span><strong>Import backup</strong><small>Restore items from a saved file</small></span><span class="action-chevron">›</span></button>
       <input type="file" accept=".json,application/json" id="importFile" hidden/>
-      <div class="settings-note">Version 1 · Offline-capable after first online load. No account or automatic sync.</div>
+      <div class="settings-note">Version 1.1 · Offline-capable after first online load. No account or automatic sync.</div>
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script>
+    // iOS can ignore viewport zoom restrictions; block pinch gestures explicitly.
+    for (const name of ['gesturestart', 'gesturechange']) {
+      document.addEventListener(name, event => event.preventDefault(), {passive: false});
+    }
+    document.addEventListener('touchmove', event => {
+      if (event.touches.length > 1) event.preventDefault();
+    }, {passive: false});
+  </script>
   <script src="./app.js" defer></script>
 </body>
 </html>
